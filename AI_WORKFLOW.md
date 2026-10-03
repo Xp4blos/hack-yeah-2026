@@ -108,3 +108,11 @@ This file documents all AI-assisted development for this submission, as required
 - \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully. The imperfect sound files were sucessfully used as well\*\*
 - \*\*Limitations: - \*\*
 --&gt;
+### &lt;2026-10-03 18:08 UTC&gt; — &lt;Adding speech recognition&gt;
+- \*\*Tool/Model: Claude sonnet 5.5\*\*
+- \*\*Task: Adding speech recognition as a substitute for sign language and special, warning keywords like "help , "watch out", etc.\*\*
+- \*\*Prompt(s): Add a speech recognition module, which converts spoken language to the text understandable for the deaf. Add special functions to keywords like "help" or "watch out", which would cause the phone to vibrate. Include tests.\*\*
+- \*\*Output handling: The code has been added to the directory, cmake file was configured and integrity was checked.\*\*
+- \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully. Further validation will be possible while connecting the engine to the application\*\*
+- \*\*Limitations: Small base of languages, which the program can recognise. Adding more options would be too difficult for the LLM to handle.\*\*
+--&gt;
