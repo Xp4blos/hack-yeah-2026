@@ -100,3 +100,11 @@ This file documents all AI-assisted development for this submission, as required
 - \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully\*\*
 - \*\*Limitations: The amount of sounds implementet on this stage was limited\*\*
 --&gt;
+### &lt;2026-10-03 14:19 UTC&gt; — &lt;Further development of engine&gt;
+- \*\*Tool/Model: Claude sonnet 5.5\*\*
+- \*\*Task: Further development of the engine by adding custom sounds feature\*\*
+- \*\*Prompt(s): Add an external sound adding module for saving and future recognition. Include tests.\*\*
+- \*\*Output handling: The code has been throughoutly analysed and changes in effectiveness were applied\*\*
+- \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully. The imperfect sound files were sucessfully used as well\*\*
+- \*\*Limitations: - \*\*
+--&gt;

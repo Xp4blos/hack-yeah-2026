@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.16)
+project(ambient_core LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(ambient_core STATIC src/fft.cpp src/detector.cpp src/custom.cpp src/trainer.cpp)
+target_include_directories(ambient_core PUBLIC include)
+target_compile_options(ambient_core PRIVATE -Wall -Wextra -Wpedantic)
+
+option(AMBIENT_BUILD_TESTS "Build unit tests" ON)
+if(AMBIENT_BUILD_TESTS)
+  enable_testing()
+  add_executable(test_core tests/test_core.cpp)
+  target_link_libraries(test_core PRIVATE ambient_core)
+  add_test(NAME test_core COMMAND test_core)
+  add_executable(test_custom tests/test_custom.cpp)
+  target_link_libraries(test_custom PRIVATE ambient_core)
+  add_test(NAME test_custom COMMAND test_custom)
+endif()
+
+option(AMBIENT_BUILD_TOOLS "Build wav_cli" ON)
+if(AMBIENT_BUILD_TOOLS)
+  add_executable(wav_cli tools/wav_cli.cpp)
+  target_link_libraries(wav_cli PRIVATE ambient_core)
+endif()
+
+# End-to-end checks of wav_cli on generated samples (tests/data, see tools/gen_test_wavs.py)
+if(AMBIENT_BUILD_TESTS AND AMBIENT_BUILD_TOOLS)
+  set(S ${CMAKE_CURRENT_SOURCE_DIR}/tests/data)
+  add_test(NAME wav_alarm_knock COMMAND wav_cli --expect alarm=1,knock=1,loud_sound=0 ${S}/sample_alarm_knock.wav)
+  add_test(NAME wav_loud        COMMAND wav_cli --expect alarm=0,knock=0,loud_sound=1 ${S}/sample_loud.wav)
+  add_test(NAME wav_custom_fridge COMMAND wav_cli --learn fridge=${S}/sample_fridge_learn.wav
+           --expect custom:fridge=2,knock=0,loud_sound=0 ${S}/sample_fridge_stream.wav)
+  add_test(NAME wav_quiet_noise COMMAND wav_cli --expect alarm=0,knock=0,loud_sound=0 ${S}/sample_quiet_noise.wav)
+endif()
