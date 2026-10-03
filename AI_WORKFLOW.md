@@ -92,11 +92,11 @@ This file documents all AI-assisted development for this submission, as required
 
 &lt;!-- Append per-contribution entries below. Format (see AGENTS.md §4):
 
-### &lt;YYYY-MM-DD HH:MM UTC&gt; — &lt;short task title&gt;
-- \*\*Tool/Model:\*\*
-- \*\*Task:\*\*
-- \*\*Prompt(s):\*\*
-- \*\*Output handling:\*\*
-- \*\*Validation:\*\*
-- \*\*Limitations:\*\*
+### &lt;2026-10-03 13:11 UTC&gt; — &lt;Basic C++ engine&gt;
+- \*\*Tool/Model: Claude sonnet 5.5\*\*
+- \*\*Task: Creating a basic C++ engine for sound recognition\*\*
+- \*\*Prompt(s): Create a C++ project, which contains an engine for recognising sounds essential for wellbeing of deaf people. Use CMake and include tests. The engine will be used in a mobile application for HarmonyOS.\*\*
+- \*\*Output handling: The code has been throughoutly analysed and changes in effectiveness were applied\*\*
+- \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully\*\*
+- \*\*Limitations: The amount of sounds implementet on this stage was limited\*\*
 --&gt;
