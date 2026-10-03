@@ -13,7 +13,17 @@ constexpr float kBandHiHz = 7600.f;
 constexpr std::size_t kMaxFrames = 4000;
 constexpr std::size_t kMaxName = 256;
 constexpr int kPeakConfirmFrames = 2;
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;  // v2 = v1 + trailing CRC32; v1 is still read
+constexpr float kMaxRefractoryS = 3600.f;
+
+std::uint32_t crc32(const std::uint8_t* p, std::size_t n) {
+    std::uint32_t c = 0xFFFFFFFFu;
+    for (std::size_t i = 0; i < n; ++i) {
+        c ^= p[i];
+        for (int k = 0; k < 8; ++k) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+    }
+    return ~c;
+}
 const char kMagic[4] = {'A', 'S', 'N', 'D'};
 
 void put32(std::vector<std::uint8_t>& o, std::uint32_t v) {
@@ -81,6 +91,10 @@ void validate_sound(const CustomSound& s) {
     if (!(s.threshold > 0.f && s.threshold < 1.f)) throw std::invalid_argument("custom sound: bad threshold");
     if (!std::isfinite(s.min_level_db) || !(s.refractory_s >= 0.f) || !std::isfinite(s.refractory_s))
         throw std::invalid_argument("custom sound: bad parameters");
+    if (s.refractory_s > kMaxRefractoryS || s.min_level_db < -140.f || s.min_level_db > 0.f)
+        throw std::invalid_argument("custom sound: parameter out of range");
+    if ((s.frame_size & (s.frame_size - 1)) != 0 || s.frame_size > 16384 || s.sample_rate > 192000)
+        throw std::invalid_argument("custom sound: bad audio parameters");
     if (!s.env.empty() && s.env.size() != s.frames) throw std::invalid_argument("custom sound: envelope size mismatch");
     for (float v : s.tmpl)
         if (!std::isfinite(v)) throw std::invalid_argument("custom sound: non-finite template");
@@ -105,17 +119,26 @@ std::vector<std::uint8_t> serialize(const CustomSound& s) {
     for (float v : s.tmpl) putf(o, v);
     put32(o, static_cast<std::uint32_t>(s.env.size()));
     for (float v : s.env) putf(o, v);
+    put32(o, crc32(o.data(), o.size()));
     return o;
 }
 
 CustomSound deserialize_sound(const std::uint8_t* data, std::size_t size) {
     if (data == nullptr) throw std::invalid_argument("custom sound: no data");
     Reader r{data, size};
-    r.need(4);
+    r.need(8);
     if (std::memcmp(r.p, kMagic, 4) != 0) throw std::invalid_argument("custom sound: bad magic");
     r.p += 4;
     r.left -= 4;
-    if (r.u32() != kVersion) throw std::invalid_argument("custom sound: unsupported version");
+    const std::uint32_t version = r.u32();
+    if (version != 1 && version != kVersion) throw std::invalid_argument("custom sound: unsupported version");
+    if (version == kVersion) {  // integrity check over everything before the CRC
+        if (size < 12) throw std::invalid_argument("custom sound: truncated data");
+        const std::uint8_t* c = data + size - 4;
+        const std::uint32_t stored = c[0] | (c[1] << 8) | (c[2] << 16) | (static_cast<std::uint32_t>(c[3]) << 24);
+        if (crc32(data, size - 4) != stored) throw std::invalid_argument("custom sound: checksum mismatch");
+        r.left -= 4;  // the CRC itself is not payload
+    }
 
     CustomSound s;
     s.sample_rate = r.u32();
@@ -141,6 +164,7 @@ CustomSound deserialize_sound(const std::uint8_t* data, std::size_t size) {
     r.need(static_cast<std::size_t>(elen) * 4);
     s.env.resize(elen);
     for (auto& v : s.env) v = r.f32();
+    if (r.left != 0) throw std::invalid_argument("custom sound: trailing data");
     validate_sound(s);
     return s;
 }

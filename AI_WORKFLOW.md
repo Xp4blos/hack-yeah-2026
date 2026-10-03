@@ -116,3 +116,11 @@ This file documents all AI-assisted development for this submission, as required
 - \*\*Validation: The code has been analysed and checked, and the test was conducted sucessfully. Further validation will be possible while connecting the engine to the application\*\*
 - \*\*Limitations: Small base of languages, which the program can recognise. Adding more options would be too difficult for the LLM to handle.\*\*
 --&gt;
+### &lt;2026-10-03 19:29 UTC&gt; — &lt;Polishing the reliability&gt;
+- \*\*Tool/Model: Claude sonnet 5.5\*\*
+- \*\*Task: Verification of the safety and validity of the tests, adding changes to improve the performance \*\*
+- \*\*Prompt(s): Verify the reliability of the system and make sure to include the edge cases of tests. Suggest a modification of the code to provide maximum safety of the user.\*\*
+- \*\*Output handling: The code has been verified by a human and the useful changes were applied. An additional test of safety was included in the tests directory.\*\*
+- \*\*Validation: The code has been analysed and checked, and the new, more reliable tests were conducted.\*\*
+- \*\*Limitations: - \*\*
+--&gt;

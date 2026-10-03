@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -177,6 +178,7 @@ public:
     virtual ~SpeechRecognizer() = default;
     virtual void set_callback(RecognitionCallback cb) = 0;
     virtual void start() = 0;
+    // stop() must not return while a callback is still running (join the callback thread).
     virtual void stop() = 0;
     // Mono 16-bit PCM from the microphone. May be a no-op if the backend captures audio itself.
     virtual void write_audio(const std::int16_t* samples, std::size_t count) = 0;
@@ -209,6 +211,7 @@ private:
     std::unique_ptr<SpeechRecognizer> rec_;
     SpeechUpdateCallback on_update_;
     mutable std::mutex mu_;
+    std::atomic<bool> closed_{false};
     SpeechPipeline pipe_;
 };
 

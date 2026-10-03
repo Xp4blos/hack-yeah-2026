@@ -228,7 +228,7 @@ static void test_revised_hypothesis_does_not_double_fire() {
 
 static void test_repeated_keyword_and_cooldown() {
     RecordingVibrator v;
-    SpeechPipeline p({}, &v);  // default cooldown 2 s
+    SpeechPipeline p({}, &v);  // built-in rules: cooldown 1 s (a missed alert is worse than an extra buzz)
     CHECK(p.on_result("help", false, 0.0).alerts.size() == 1);
     CHECK(p.on_result("help help", false, 0.5).alerts.empty());  // second one inside the cooldown
     CHECK(p.on_result("help help help", false, 3.0).alerts.size() == 1);
@@ -236,7 +236,7 @@ static void test_repeated_keyword_and_cooldown() {
 
     // cooldown also applies across utterances
     p.on_result("help help help", true, 3.1);
-    CHECK(p.on_result("help", true, 4.0).alerts.empty());
+    CHECK(p.on_result("help", true, 3.5).alerts.empty());
     CHECK(p.on_result("help", true, 7.0).alerts.size() == 1);
 
     // cooldown 0 -> every new occurrence alerts
@@ -476,8 +476,8 @@ static void test_session() {
         CHECK(!r->started && r->stops == 1);
         // stop() ended the interim utterance, so the next session's "help" counts again
         s.start();
-        r->say("help", false, 21.0);
-        CHECK(v.calls.size() == 3);
+        r->say("help", false, 21.5);  // cooldown (1 s) has passed
+        CHECK(v.calls.size() == 4);
     }
 
     bool threw = false;
@@ -525,6 +525,13 @@ static void test_session_threads() {
     CHECK(s.history().size() == 50);  // default max_history
 }
 
+static void test_revised_away_then_real_help_fires() {
+    SpeechPipeline p;
+    CHECK(p.on_result("help", false, 20.0).alerts.size() == 1);
+    CHECK(p.on_result("hold", false, 20.5).alerts.empty());                // guess revised away
+    CHECK(p.on_result("hold on help", false, 23.5).alerts.size() == 1);    // real help must alert
+}
+
 int main() {
     test_normalize();
     test_utf16_offsets();
@@ -535,6 +542,7 @@ int main() {
     test_partial_results_alert_once();
     test_trigger_on_final_only();
     test_revised_hypothesis_does_not_double_fire();
+    test_revised_away_then_real_help_fires();
     test_repeated_keyword_and_cooldown();
     test_utterance_boundaries();
     test_priority_and_single_vibration();

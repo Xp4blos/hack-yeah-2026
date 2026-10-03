@@ -68,6 +68,7 @@ KeywordRule make_rule(const char* phrase, const char* label, VibrationPattern p,
     r.label = label;
     r.pattern = std::move(p);
     r.priority = priority;
+    r.cooldown_s = 1.f;
     return r;
 }
 
@@ -262,6 +263,8 @@ SpeechUpdate SpeechPipeline::on_result(const std::string& text_in, bool is_final
 
     for (auto& s : slots_) {
         const auto pos = find_all(nt.text, s.norm);
+        // The recognizer may revise its hypothesis: occurrences that vanished must not mask new ones.
+        s.fired_in_utt = std::min<int>(s.fired_in_utt, static_cast<int>(pos.size()));
         const auto span_begin = [&](std::size_t p) { return nt.begin[p]; };
         const auto span_end = [&](std::size_t p) { return nt.end[p + s.norm.size() - 1]; };
         for (auto p : pos) cap.highlights.push_back({span_begin(p), span_end(p), s.id, s.rule.label});
@@ -327,6 +330,7 @@ SpeechSession::SpeechSession(std::unique_ptr<SpeechRecognizer> recognizer, Speec
 }
 
 SpeechSession::~SpeechSession() {
+    closed_.store(true);
     rec_->stop();
     rec_->set_callback(nullptr);
 }
@@ -344,12 +348,18 @@ void SpeechSession::write_audio(const std::int16_t* samples, std::size_t count) 
 }
 
 void SpeechSession::handle(const std::string& text, bool is_final, double t) {
+    if (closed_.load()) return;
     SpeechUpdate up;
     {
         std::lock_guard<std::mutex> lk(mu_);
         up = pipe_.on_result(text, is_final, t);
     }
-    if (on_update_) on_update_(up);
+    if (on_update_) {
+        try {  // an exception in the app callback must never kill the recognizer thread
+            on_update_(up);
+        } catch (...) {
+        }
+    }
 }
 
 int SpeechSession::add_rule(KeywordRule r) {

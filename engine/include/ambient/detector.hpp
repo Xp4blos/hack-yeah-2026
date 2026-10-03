@@ -2,6 +2,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -55,6 +56,8 @@ struct Config {
 };
 
 // Streaming detector. Feed mono 16-bit PCM in chunks of any size.
+// Thread-safe: every public method is serialised, so custom sounds may be added/removed from the
+// UI thread while the audio thread calls process(). Not copyable.
 class Detector {
 public:
     explicit Detector(Config cfg = {});
@@ -69,7 +72,11 @@ public:
     // Adding a sound with an existing name replaces it. Throws std::invalid_argument.
     int add_custom_sound(const CustomSound& s);
     bool remove_custom_sound(const std::string& name);
-    std::vector<std::string> custom_sound_names() const { return matcher_.names(); }
+    std::vector<std::string> custom_sound_names() const;
+
+    // Seconds of audio consumed since construction / reset(). Compare with wall-clock time to
+    // notice a dead microphone (the user must be told when the app can no longer hear).
+    double stream_time_s() const;
 
     // Offline feature extraction (used by the trainer); does not touch streaming state.
     FrameMatrix extract_frames(const std::int16_t* samples, std::size_t count);
@@ -87,6 +94,7 @@ private:
     void reset_state();
     void release_held(double now, std::vector<Event>& out);
 
+    mutable std::mutex mu_;
     Config cfg_;
     Fft fft_;
     std::vector<float> window_;

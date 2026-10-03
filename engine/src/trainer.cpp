@@ -161,6 +161,21 @@ TrainResult train_custom_sound(const Config& cfg, const std::string& name,
     s.refractory_s = opt.refractory_s;
     s.tmpl = std::move(avg);
     s.env = std::move(avg_env);
+
+    // Self-check at enrolment: the template must recognise each of its own recordings,
+    // otherwise it would fail silently in the field.
+    for (std::size_t i = 0; i < recordings.size(); ++i) {
+        Detector probe(cfg);
+        probe.add_custom_sound(s);
+        std::vector<std::int16_t> pcm(recordings[i].samples, recordings[i].samples + recordings[i].count);
+        pcm.resize(pcm.size() + static_cast<std::size_t>(cfg.sample_rate), 0);  // let the matcher settle
+        bool found = false;
+        for (const Event& e : probe.process(pcm.data(), pcm.size()))
+            found = found || e.type == EventType::Custom;
+        if (!found)
+            throw std::invalid_argument(rec_name(i) + " is not reliably recognised by the learned sound; "
+                                                      "record it again");
+    }
     return res;
 }
 

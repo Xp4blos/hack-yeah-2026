@@ -11,6 +11,7 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kEps = 1e-9f;
 constexpr int kPeakHalfWidth = 3;   // bins around the spectral peak
 constexpr float kMinAnalysisHz = 100.f;
+constexpr float kExplainMarginDb = 6.f;  // custom match hides built-in events up to this much louder
 
 float clamp01(float v) { return std::min(1.f, std::max(0.f, v)); }
 }  // namespace
@@ -36,6 +37,17 @@ void Config::validate() const {
     if (alarm_min_hz >= alarm_max_hz || alarm_max_hz > sample_rate / 2.f)
         throw std::invalid_argument("invalid alarm frequency range");
     if (custom_hold_s < 0.f) throw std::invalid_argument("custom_hold_s must be >= 0");
+    if (sample_rate > 192000 || frame_size > 16384)
+        throw std::invalid_argument("sample_rate / frame_size too large");
+    if (!std::isfinite(min_level_db) || min_level_db > 0.f)
+        throw std::invalid_argument("min_level_db must be finite and <= 0");
+    if (!(onset_db > 0.f) || !(decay_db > 0.f) || !std::isfinite(onset_db) || !std::isfinite(decay_db))
+        throw std::invalid_argument("onset_db / decay_db must be > 0");
+    if (!(alarm_min_s > 0.f) || !(knock_max_s > 0.f))
+        throw std::invalid_argument("alarm_min_s / knock_max_s must be > 0");
+    if (alarm_gap_frames < 0) throw std::invalid_argument("alarm_gap_frames must be >= 0");
+    if (!(background_alpha > 0.f && background_alpha <= 1.f))
+        throw std::invalid_argument("background_alpha must be in (0, 1]");
 }
 
 Detector::Detector(Config cfg)
@@ -54,17 +66,32 @@ Detector::Detector(Config cfg)
                        static_cast<double>(cfg_.frame_size) / cfg_.sample_rate);
 }
 
+std::vector<std::string> Detector::custom_sound_names() const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return matcher_.names();
+}
+
+double Detector::stream_time_s() const {
+    std::lock_guard<std::mutex> lk(mu_);
+    return static_cast<double>(consumed_ + read_) / static_cast<double>(cfg_.sample_rate);
+}
+
 int Detector::add_custom_sound(const CustomSound& s) {
     validate_sound(s);
+    std::lock_guard<std::mutex> lk(mu_);
     if (static_cast<int>(s.sample_rate) != cfg_.sample_rate || s.frame_size != cfg_.frame_size ||
         s.hop_size != cfg_.hop_size)
         throw std::invalid_argument("custom sound was trained with a different sample_rate/frame/hop");
     return matcher_.add(s);
 }
 
-bool Detector::remove_custom_sound(const std::string& name) { return matcher_.remove(name); }
+bool Detector::remove_custom_sound(const std::string& name) {
+    std::lock_guard<std::mutex> lk(mu_);
+    return matcher_.remove(name);
+}
 
 std::vector<Event> Detector::flush() {
+    std::lock_guard<std::mutex> lk(mu_);
     std::vector<Event> out;
     out.swap(held_);
     return out;
@@ -80,6 +107,7 @@ void Detector::release_held(double now, std::vector<Event>& out) {
 }
 
 FrameMatrix Detector::extract_frames(const std::int16_t* samples, std::size_t count) {
+    std::lock_guard<std::mutex> lk(mu_);
     FrameMatrix m;
     if (samples == nullptr) return m;
     std::vector<float> buf(count);
@@ -105,6 +133,7 @@ void Detector::reset_state() {
 }
 
 void Detector::reset() {
+    std::lock_guard<std::mutex> lk(mu_);
     held_.clear();
     matcher_.reset();
     pending_.clear();
@@ -116,6 +145,7 @@ void Detector::reset() {
 std::vector<Event> Detector::process(const std::int16_t* samples, std::size_t count) {
     std::vector<Event> out;
     if (samples == nullptr || count == 0) return out;
+    std::lock_guard<std::mutex> lk(mu_);
 
     pending_.reserve(pending_.size() + count);
     for (std::size_t i = 0; i < count; ++i) {
@@ -143,8 +173,12 @@ std::vector<Event> Detector::process(const std::int16_t* samples, std::size_t co
                 const CustomSound* s = matcher_.find(m.id);
                 if (s == nullptr) continue;
                 // The sound is explained by the custom match: drop built-in events inside it.
+                // A much louder transient is NOT explained by it and stays reported.
                 held_.erase(std::remove_if(held_.begin(), held_.end(),
-                                           [&](const Event& h) { return h.time_s >= m.start_s - hop_s_; }),
+                                           [&](const Event& h) {
+                                               return h.time_s >= m.start_s - hop_s_ &&
+                                                      h.level_db <= m.level_db + kExplainMarginDb;
+                                           }),
                             held_.end());
                 Event e{EventType::Custom,
                         clamp01(0.5f + 0.5f * (m.score - s->threshold) / (1.f - s->threshold)),
